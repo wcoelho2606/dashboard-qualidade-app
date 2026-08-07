@@ -1,1 +1,590 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gestão de Alertas de Qualidade</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root{
+    --navy:#0F2A4D;
+    --navy-2:#16345E;
+    --blue:#1B4F91;
+    --blue-light:#2E77C4;
+    --cyan:#17B4C4;
+    --amber:#E8A33D;
+    --red:#D64545;
+    --green:#3FA76B;
+    --bg:#EEF1F6;
+    --card:#FFFFFF;
+    --text:#1E2A3A;
+    --text-mut:#6B7789;
+    --border:#E2E6EC;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{
+    font-family:'Segoe UI',-apple-system,BlinkMacSystemFont,Arial,sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    font-size:13px;
+  }
+  .app{display:flex;flex-direction:column;min-height:100vh;}
+
+  header{
+    background:linear-gradient(135deg,var(--navy) 0%,var(--navy-2) 100%);
+    color:#fff;display:flex;align-items:center;justify-content:space-between;
+    padding:14px 24px;flex-shrink:0;
+  }
+  .header-left{display:flex;align-items:center;gap:14px;}
+  .shield{
+    width:42px;height:42px;border-radius:50%;background:rgba(23,180,196,0.18);
+    display:flex;align-items:center;justify-content:center;color:var(--cyan);font-size:20px;
+    border:1px solid rgba(23,180,196,0.4);
+  }
+  .header-left h1{font-size:17px;font-weight:700;letter-spacing:.3px;}
+  .header-left p{font-size:11px;color:#B7C4D9;margin-top:2px;}
+  .header-right{display:flex;align-items:center;gap:22px;}
+  .update-block{text-align:right;font-size:11px;color:#B7C4D9;line-height:1.4;}
+  .update-block b{color:#fff;font-weight:600;}
+  .period-block{display:flex;flex-direction:column;gap:3px;}
+  .period-block label{font-size:10px;color:#8FA1BC;text-transform:uppercase;letter-spacing:.5px;}
+  .period-block select{
+    background:rgba(255,255,255,0.08);color:#fff;border:1px solid rgba(255,255,255,0.2);
+    border-radius:6px;padding:5px 10px;font-size:12px;
+  }
+  .filter-btn{
+    width:34px;height:34px;border-radius:8px;background:rgba(255,255,255,0.08);
+    border:1px solid rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;
+    color:#fff;cursor:pointer;
+  }
+
+  .body-wrap{display:flex;flex:1;min-height:0;}
+
+  aside{
+    width:190px;background:var(--navy);flex-shrink:0;
+    display:flex;flex-direction:column;justify-content:space-between;padding:16px 0;
+  }
+  nav{display:flex;flex-direction:column;gap:2px;padding:0 12px;}
+  nav a{
+    display:flex;align-items:center;gap:10px;color:#C4D0E2;text-decoration:none;font-size:13px;
+    padding:10px 12px;border-radius:8px;transition:background .15s;
+  }
+  nav a i{width:16px;text-align:center;font-size:14px;}
+  nav a.active{background:var(--blue-light);color:#fff;font-weight:600;}
+  nav a:hover:not(.active){background:rgba(255,255,255,0.06);}
+  .new-alert-btn{
+    margin:12px;background:var(--blue-light);color:#fff;border:none;border-radius:10px;
+    padding:12px 10px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:4px;
+  }
+  .new-alert-btn .row{display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px;}
+  .new-alert-btn span.small{font-size:10px;color:#D6E3F5;font-weight:400;}
+
+  main{flex:1;padding:18px 20px;overflow-x:hidden;min-width:0;}
+
+  .kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:16px;}
+  .kpi{border-radius:12px;padding:16px;color:#fff;display:flex;flex-direction:column;gap:8px;}
+  .kpi .label{font-size:11px;letter-spacing:.4px;font-weight:600;opacity:.92;}
+  .kpi .value{font-size:30px;font-weight:700;}
+  .kpi .sub{font-size:11px;opacity:.85;}
+  .kpi.blue{background:linear-gradient(135deg,#1B4F91,#123765);}
+  .kpi.amber{background:linear-gradient(135deg,#EFAE4E,#D98A22);}
+  .kpi.red{background:linear-gradient(135deg,#E15A5A,#C43333);}
+  .kpi.green{background:linear-gradient(135deg,#4CB97C,#2E8956);}
+  .kpi.white{background:#fff;color:var(--text);border:1px solid var(--border);}
+  .kpi.white .label{color:var(--text-mut);}
+  .kpi.white .value{color:var(--navy);}
+  .kpi.white .sub{color:var(--text-mut);}
+
+  .grid-main{display:grid;grid-template-columns:1fr 300px;gap:16px;margin-bottom:16px;align-items:start;}
+
+  .card{background:var(--card);border-radius:12px;border:1px solid var(--border);padding:16px;}
+  .card h2{font-size:12px;letter-spacing:.4px;color:var(--navy);font-weight:700;margin-bottom:12px;text-transform:uppercase;}
+
+  table{width:100%;border-collapse:collapse;font-size:12px;}
+  thead th{
+    text-align:left;color:var(--text-mut);font-weight:600;font-size:11px;text-transform:uppercase;
+    letter-spacing:.3px;padding:8px 6px;border-bottom:1px solid var(--border);
+  }
+  tbody td{padding:10px 6px;border-bottom:1px solid var(--border);color:var(--text);}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:#F7F9FC;}
+
+  .badge{padding:4px 10px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.3px;display:inline-block;}
+  .badge.vencido{background:#FBDEDE;color:#B22C2C;}
+  .badge.prox{background:#FBEBCF;color:#A6710F;}
+  .badge.emdia{background:#DCF3E5;color:#237A4C;}
+  .badge.andamento{background:#DCE7FB;color:#1B4F91;}
+  .badge.aguardando{background:#EAE9F2;color:#5C5A78;}
+  .badge.encerrado{background:#DCF3E5;color:#237A4C;}
+  .badge.enviado-red{background:#FBDEDE;color:#B22C2C;}
+  .badge.enviado{background:#DCF3E5;color:#237A4C;}
+  .badge.agendado{background:#DCE7FB;color:#1B4F91;}
+
+  .see-all{display:inline-block;margin-top:10px;color:var(--blue-light);font-size:12px;text-decoration:none;font-weight:600;}
+  .see-all:hover{text-decoration:underline;}
+
+  .detail-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;}
+  .detail-header h2{margin-bottom:0;}
+  .detail-id{color:var(--red);font-weight:700;font-size:14px;}
+  .detail-sub{color:var(--text-mut);font-size:12px;margin-top:2px;}
+  .detail-list{display:flex;flex-direction:column;gap:9px;margin-top:10px;}
+  .detail-item{display:flex;justify-content:space-between;align-items:center;font-size:12px;gap:8px;}
+  .detail-item .k{display:flex;align-items:center;gap:7px;color:var(--text-mut);}
+  .detail-item .k i{width:14px;color:var(--blue-light);}
+  .detail-item .v{font-weight:600;text-align:right;}
+  .detail-item .v.red{color:var(--red);}
+  .detail-note{
+    background:#F7F9FC;border:1px solid var(--border);border-radius:8px;padding:10px;
+    font-size:12px;color:var(--text-mut);margin-top:6px;line-height:1.5;
+  }
+  .hist-btn{
+    width:100%;margin-top:14px;background:var(--blue-light);color:#fff;border:none;border-radius:8px;
+    padding:10px;font-weight:700;font-size:12px;letter-spacing:.3px;cursor:pointer;
+  }
+  .hist-btn:hover{background:var(--blue);}
+  .empty-hint{color:var(--text-mut);font-size:12px;padding:8px 0;}
+
+  .chart-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px;}
+  .chart-card{background:var(--card);border-radius:12px;border:1px solid var(--border);padding:14px;}
+  .chart-card h2{font-size:11px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.3px;margin-bottom:10px;}
+  .chart-box{position:relative;height:150px;}
+  .legend{display:flex;flex-wrap:wrap;gap:6px 10px;margin-top:8px;font-size:10px;color:var(--text-mut);}
+  .legend span{display:flex;align-items:center;gap:4px;}
+  .legend i{width:8px;height:8px;border-radius:2px;display:inline-block;}
+
+  .bottom-row{display:grid;grid-template-columns:1.1fr 1fr;gap:16px;}
+  .flow{display:flex;align-items:flex-start;justify-content:space-between;margin-top:6px;}
+  .flow-step{display:flex;flex-direction:column;align-items:center;text-align:center;flex:1;position:relative;}
+  .flow-step .circle{
+    width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    color:#fff;font-size:15px;margin-bottom:8px;z-index:1;
+  }
+  .flow-step .fname{font-size:10.5px;font-weight:600;color:var(--text);line-height:1.3;}
+  .flow-step .fdate{font-size:9.5px;color:var(--text-mut);margin-top:4px;}
+  .flow-line{position:absolute;top:19px;left:50%;width:100%;height:2px;background:var(--border);z-index:0;}
+  .flow-step:last-child .flow-line{display:none;}
+
+  .reminders-table td, .reminders-table th{font-size:11.5px;}
+  .reminders-table td.msg{color:var(--text-mut);max-width:170px;}
+
+  footer{text-align:center;padding:14px;color:var(--text-mut);font-size:11px;font-style:italic;}
+
+  .load-banner{
+    background:#FFF7E6;border:1px solid #F0DBA6;color:#8A6416;border-radius:8px;
+    padding:8px 12px;font-size:12px;margin-bottom:14px;display:none;
+  }
+
+  @media(max-width:1200px){
+    .kpi-row{grid-template-columns:repeat(2,1fr);}
+    .grid-main{grid-template-columns:1fr;}
+    .chart-row{grid-template-columns:repeat(2,1fr);}
+    .bottom-row{grid-template-columns:1fr;}
+    aside{width:64px;}
+    nav a span{display:none;}
+    .new-alert-btn span, .new-alert-btn .row span{display:none;}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <div class="header-left">
+      <div class="shield"><i class="fa-solid fa-shield-halved"></i></div>
+      <div>
+        <h1>GESTÃO DE ALERTAS DE QUALIDADE</h1>
+        <p>Supabase + GitHub</p>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="update-block">Última atualização:<br><b id="last-update">-</b></div>
+      <div class="period-block">
+        <label>Período</label>
+        <select id="period-select">
+          <option>Todos</option>
+          <option>Últimos 7 dias</option>
+          <option>Últimos 30 dias</option>
+          <option>Este mês</option>
+        </select>
+      </div>
+      <div class="filter-btn" id="refresh-btn" title="Atualizar dados"><i class="fa-solid fa-rotate"></i></div>
+    </div>
+  </header>
+
+  <div class="body-wrap">
+    <aside>
+      <nav>
+        <a href="#" class="active" data-view="visao"><i class="fa-solid fa-house"></i><span>Visão Geral</span></a>
+        <a href="#" data-view="abertos"><i class="fa-solid fa-bell"></i><span>Alertas Abertos</span></a>
+        <a href="#" data-view="vencidos"><i class="fa-solid fa-clock"></i><span>Alertas Vencidos</span></a>
+        <a href="#" data-view="encerrados"><i class="fa-solid fa-square-check"></i><span>Encerrados</span></a>
+        <a href="#" data-view="indicadores"><i class="fa-solid fa-gauge-high"></i><span>Indicadores</span></a>
+        <a href="#" data-view="analises"><i class="fa-solid fa-chart-line"></i><span>Análises</span></a>
+        <a href="#" data-view="relatorios"><i class="fa-solid fa-file-lines"></i><span>Relatórios</span></a>
+      </nav>
+      <button class="new-alert-btn" id="new-alert-btn">
+        <span class="row"><i class="fa-solid fa-circle-plus"></i><span>Novo Alerta de Qualidade</span></span>
+        <span class="small">Clique para cadastrar um novo alerta.</span>
+      </button>
+    </aside>
+
+    <main>
+      <div class="load-banner" id="load-banner">Carregando dados do Supabase...</div>
+
+      <div class="kpi-row">
+        <div class="kpi blue"><div class="label">TOTAL DE ALERTAS</div><div class="value" id="kpi-total">-</div><div class="sub" id="kpi-total-pct">-</div></div>
+        <div class="kpi amber"><div class="label">ALERTAS ABERTOS</div><div class="value" id="kpi-abertos">-</div><div class="sub" id="kpi-abertos-pct">-</div></div>
+        <div class="kpi red"><div class="label">ALERTAS VENCIDOS</div><div class="value" id="kpi-vencidos">-</div><div class="sub" id="kpi-vencidos-pct">-</div></div>
+        <div class="kpi green"><div class="label">ALERTAS ENCERRADOS</div><div class="value" id="kpi-encerrados">-</div><div class="sub" id="kpi-encerrados-pct">-</div></div>
+        <div class="kpi white"><div class="label">% ENCERRADOS NO PRAZO</div><div class="value" id="kpi-prazo">-</div><div class="sub">Meta 80%</div></div>
+      </div>
+
+      <div class="grid-main">
+        <div class="card">
+          <h2>Alertas de Qualidade - Abertos</h2>
+          <table id="alerts-table">
+            <thead>
+              <tr>
+                <th>Nº AQ</th><th>Produto</th><th>Lote</th><th>Defeito Detectado</th>
+                <th>Área Responsável</th><th>Responsável</th><th>Prazo</th><th>Dias Restantes</th><th>Status</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+          <a href="#" class="see-all">Ver todos os alertas abertos</a>
+        </div>
+
+        <div class="card" id="detail-panel">
+          <div class="detail-header">
+            <div>
+              <h2>DETALHES DO ALERTA</h2>
+              <div class="detail-id" id="d-id">-</div>
+              <div class="detail-sub" id="d-defeito">-</div>
+            </div>
+          </div>
+          <div class="detail-list">
+            <div class="detail-item"><span class="k"><i class="fa-solid fa-box"></i>Produto:</span><span class="v" id="d-produto">-</span></div>
+            <div class="detail-item"><span class="k"><i class="fa-solid fa-layer-group"></i>Lote:</span><span class="v" id="d-lote">-</span></div>
+            <div class="detail-item"><span class="k"><i class="fa-solid fa-industry"></i>Área Responsável:</span><span class="v" id="d-area">-</span></div>
+            <div class="detail-item"><span class="k"><i class="fa-solid fa-user"></i>Responsável:</span><span class="v" id="d-resp">-</span></div>
+            <div class="detail-item"><span class="k"><i class="fa-solid fa-calendar-days"></i>Data de Emissão:</span><span class="v" id="d-emissao">-</span></div>
+            <div class="detail-item"><span class="k"><i class="fa-solid fa-hourglass-half"></i>Prazo para Ação:</span><span class="v" id="d-prazo">-</span></div>
+            <div class="detail-item"><span class="k"><i class="fa-solid fa-stopwatch"></i>Dias Restantes:</span><span class="v" id="d-dias">-</span></div>
+            <div class="detail-item"><span class="k"><i class="fa-solid fa-circle-exclamation"></i>Status Atual:</span><span class="v" id="d-status-wrap"><span class="badge" id="d-status">-</span></span></div>
+            <div class="detail-item"><span class="k"><i class="fa-solid fa-shield"></i>Ação de Contenção:</span><span class="v" id="d-acao">-</span></div>
+          </div>
+          <div style="margin-top:10px;font-size:11px;color:var(--text-mut);display:flex;align-items:center;gap:6px;"><i class="fa-solid fa-note-sticky"></i>Observações:</div>
+          <div class="detail-note" id="d-obs">Selecione um alerta na tabela.</div>
+          <button class="hist-btn" id="hist-btn">VER HISTÓRICO COMPLETO</button>
+        </div>
+      </div>
+
+      <div class="chart-row">
+        <div class="chart-card">
+          <h2>Alertas por Área</h2>
+          <div class="chart-box"><canvas id="chart-area" role="img" aria-label="Gráfico de rosca: alertas por área">Carregando.</canvas></div>
+          <div class="legend" id="legend-area"></div>
+        </div>
+        <div class="chart-card">
+          <h2>Alertas por Status</h2>
+          <div class="chart-box"><canvas id="chart-status" role="img" aria-label="Gráfico de rosca: alertas por status">Carregando.</canvas></div>
+          <div class="legend" id="legend-status"></div>
+        </div>
+        <div class="chart-card">
+          <h2>Alertas por Tipo de Defeito</h2>
+          <div class="chart-box"><canvas id="chart-defeito" role="img" aria-label="Gráfico de barras horizontais: alertas por tipo de defeito">Carregando.</canvas></div>
+        </div>
+        <div class="chart-card">
+          <h2>Tempo Médio de Fechamento (dias)</h2>
+          <div class="chart-box"><canvas id="chart-tempo" role="img" aria-label="Gráfico de linha: tempo médio de fechamento por mês">Carregando.</canvas></div>
+        </div>
+      </div>
+
+      <div class="bottom-row">
+        <div class="card">
+          <h2>Fluxo de Tratativas</h2>
+          <div class="flow" id="flow"><div class="empty-hint">Selecione um alerta na tabela para ver o histórico.</div></div>
+        </div>
+        <div class="card">
+          <h2>Lembretes Automáticos</h2>
+          <table class="reminders-table">
+            <thead><tr><th>Alerta</th><th>Mensagem</th><th>Data Envio</th><th>Destinatário</th><th>Status</th></tr></thead>
+            <tbody id="reminders-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <footer>Painel conectado ao Supabase em tempo real. Atualize a página ou clique no ícone de recarregar para buscar os dados mais recentes.</footer>
+    </main>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+/* ============================================================
+   CONFIGURAÇÃO DO SUPABASE
+   Substitua pelos valores do seu projeto em:
+   Project Settings > API > Project URL / anon public key
+   ============================================================ */
+const SUPABASE_URL = 'SUA_SUPABASE_URL_AQUI';
+const SUPABASE_ANON_KEY = 'SUA_SUPABASE_ANON_KEY_AQUI';
+
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const STATUS_CLASS = {
+  'Vencido':'vencido', 'Próx. do prazo':'prox', 'Em dia':'emdia',
+  'Em andamento':'andamento', 'Aguard. validação':'aguardando', 'Encerrado':'encerrado'
+};
+const AREA_COLORS = ['#1B4F91','#17B4C4','#E8A33D','#D64545','#3FA76B','#8E6BC9'];
+const STATUS_COLORS = {
+  'Em andamento':'#1B4F91','Em dia':'#3FA76B','Aguard. validação':'#8E93A0',
+  'Próx. do prazo':'#E8A33D','Vencido':'#D64545','Encerrado':'#3FA76B'
+};
+
+let alertas = [];
+let charts = {};
+
+function fmtDate(iso){
+  if(!iso) return '-';
+  const [y,m,d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
+function diasRestantes(prazoIso){
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const prazo = new Date(prazoIso + 'T00:00:00');
+  return Math.round((prazo - hoje) / 86400000);
+}
+
+async function loadDashboard(){
+  document.getElementById('load-banner').style.display = 'block';
+  try{
+    const { data, error } = await sb
+      .from('alertas_qualidade')
+      .select('*')
+      .order('prazo', { ascending: true });
+    if(error) throw error;
+
+    alertas = (data || []).map(a => ({...a, dias: diasRestantes(a.prazo)}));
+
+    renderKpis(alertas);
+    renderTable(alertas.filter(a => !a.encerrado));
+    renderCharts(alertas);
+    await loadReminders();
+
+    if(alertas.length) showDetail(alertas[0]);
+    document.getElementById('last-update').textContent =
+      new Date().toLocaleString('pt-BR');
+  }catch(err){
+    console.error('Erro ao carregar dados do Supabase:', err);
+    document.getElementById('load-banner').textContent =
+      'Não foi possível carregar os dados. Verifique SUPABASE_URL e SUPABASE_ANON_KEY.';
+    return;
+  }
+  document.getElementById('load-banner').style.display = 'none';
+}
+
+function renderKpis(list){
+  const total = list.length;
+  const abertos = list.filter(a => !a.encerrado);
+  const vencidos = list.filter(a => a.status === 'Vencido');
+  const encerrados = list.filter(a => a.encerrado);
+  const noPrazo = encerrados.filter(a => a.data_encerramento && a.data_encerramento <= a.prazo);
+  const pctPrazo = encerrados.length ? ((noPrazo.length / encerrados.length) * 100).toFixed(1) : '0.0';
+
+  const pct = n => total ? ((n/total)*100).toFixed(1).replace('.',',') + '%' : '0%';
+
+  document.getElementById('kpi-total').textContent = total;
+  document.getElementById('kpi-total-pct').textContent = '100%';
+  document.getElementById('kpi-abertos').textContent = abertos.length;
+  document.getElementById('kpi-abertos-pct').textContent = pct(abertos.length);
+  document.getElementById('kpi-vencidos').textContent = vencidos.length;
+  document.getElementById('kpi-vencidos-pct').textContent = pct(vencidos.length);
+  document.getElementById('kpi-encerrados').textContent = encerrados.length;
+  document.getElementById('kpi-encerrados-pct').textContent = pct(encerrados.length);
+  document.getElementById('kpi-prazo').textContent = pctPrazo.replace('.',',') + '%';
+}
+
+function renderTable(list){
+  const tbody = document.querySelector('#alerts-table tbody');
+  tbody.innerHTML = '';
+  list.forEach(a=>{
+    const cls = STATUS_CLASS[a.status] || 'emdia';
+    const tr = document.createElement('tr');
+    tr.style.cursor = 'pointer';
+    tr.innerHTML = `
+      <td><b>${a.numero_aq}</b></td><td>${a.produto}</td><td>${a.lote}</td><td>${a.defeito}</td>
+      <td>${a.area_responsavel}</td><td>${a.responsavel}</td><td>${fmtDate(a.prazo)}</td>
+      <td>${a.dias}</td><td><span class="badge ${cls}">${a.status}</span></td>`;
+    tr.addEventListener('click', ()=>showDetail(a));
+    tbody.appendChild(tr);
+  });
+}
+
+async function showDetail(a){
+  document.getElementById('d-id').textContent = a.numero_aq;
+  document.getElementById('d-defeito').textContent = a.defeito;
+  document.getElementById('d-produto').textContent = a.produto;
+  document.getElementById('d-lote').textContent = a.lote;
+  document.getElementById('d-area').textContent = a.area_responsavel;
+  document.getElementById('d-resp').textContent = a.responsavel;
+  document.getElementById('d-emissao').textContent = fmtDate(a.data_emissao);
+  document.getElementById('d-prazo').textContent = fmtDate(a.prazo);
+  document.getElementById('d-dias').textContent = a.dias;
+  document.getElementById('d-acao').textContent = a.acao_contencao || '-';
+  document.getElementById('d-obs').textContent = a.observacoes || 'Sem observações registradas.';
+
+  const cls = STATUS_CLASS[a.status] || 'emdia';
+  const st = document.getElementById('d-status');
+  st.textContent = a.status;
+  st.className = 'badge ' + cls;
+  document.getElementById('d-prazo').className = 'v' + (cls === 'vencido' ? ' red' : '');
+
+  await loadFluxo(a.id);
+}
+
+async function loadFluxo(alertaId){
+  const flowEl = document.getElementById('flow');
+  const { data, error } = await sb
+    .from('fluxo_tratativas')
+    .select('*')
+    .eq('alerta_id', alertaId)
+    .order('data_hora', { ascending: true });
+
+  if(error || !data || !data.length){
+    flowEl.innerHTML = '<div class="empty-hint">Nenhuma etapa registrada ainda para este alerta.</div>';
+    return;
+  }
+
+  const ICONS = {
+    'Alerta Emitido':'fa-file-circle-plus','Em Análise':'fa-magnifying-glass',
+    'Ação Definida':'fa-gear','Em Implementação':'fa-screwdriver-wrench',
+    'Aguardando Validação':'fa-hourglass-half','Encerrado':'fa-circle-check'
+  };
+  const COLORS = {
+    'Alerta Emitido':'#1B4F91','Em Análise':'#E8A33D','Ação Definida':'#E8A33D',
+    'Em Implementação':'#8E6BC9','Aguardando Validação':'#8E93A0','Encerrado':'#3FA76B'
+  };
+
+  flowEl.innerHTML = data.map(f => `
+    <div class="flow-step">
+      <div class="flow-line"></div>
+      <div class="circle" style="background:${COLORS[f.etapa] || '#8E93A0'}">
+        <i class="fa-solid ${ICONS[f.etapa] || 'fa-circle'}"></i>
+      </div>
+      <div class="fname">${f.etapa}<br>${f.responsavel_etapa || ''}</div>
+      <div class="fdate">${new Date(f.data_hora).toLocaleString('pt-BR')}</div>
+    </div>`).join('');
+}
+
+async function loadReminders(){
+  const { data, error } = await sb
+    .from('lembretes')
+    .select('*, alertas_qualidade(numero_aq)')
+    .order('data_envio', { ascending: false })
+    .limit(10);
+
+  const tbody = document.getElementById('reminders-body');
+  if(error || !data || !data.length){
+    tbody.innerHTML = '<tr><td colspan="5" class="empty-hint">Nenhum lembrete cadastrado.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.map(r=>{
+    const cls = r.status === 'Enviado' ? 'enviado' : 'agendado';
+    return `<tr>
+      <td><b>${r.alertas_qualidade?.numero_aq || '-'}</b></td>
+      <td class="msg">${r.mensagem}</td>
+      <td>${new Date(r.data_envio).toLocaleString('pt-BR')}</td>
+      <td>${r.destinatario}</td>
+      <td><span class="badge ${cls}">${r.status.toUpperCase()}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+function buildLegend(el, labels, values, colors){
+  const total = values.reduce((s,v)=>s+v,0) || 1;
+  el.innerHTML = labels.map((l,i)=>{
+    const pct = ((values[i]/total)*100).toFixed(1).replace('.',',');
+    return `<span><i style="background:${colors[i]}"></i>${l} ${values[i]} (${pct}%)</span>`;
+  }).join('');
+}
+
+function renderCharts(list){
+  Object.values(charts).forEach(c => c.destroy());
+
+  const porArea = {};
+  list.forEach(a => porArea[a.area_responsavel] = (porArea[a.area_responsavel]||0) + 1);
+  const areaLabels = Object.keys(porArea);
+  const areaValues = Object.values(porArea);
+  charts.area = new Chart(document.getElementById('chart-area'), {
+    type:'doughnut',
+    data:{labels:areaLabels, datasets:[{data:areaValues, backgroundColor:AREA_COLORS, borderColor:'#fff', borderWidth:2}]},
+    options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}}
+  });
+  buildLegend(document.getElementById('legend-area'), areaLabels, areaValues, AREA_COLORS);
+
+  const porStatus = {};
+  list.forEach(a => porStatus[a.status] = (porStatus[a.status]||0) + 1);
+  const statusLabels = Object.keys(porStatus);
+  const statusValues = Object.values(porStatus);
+  const statusColors = statusLabels.map(l => STATUS_COLORS[l] || '#8E93A0');
+  charts.status = new Chart(document.getElementById('chart-status'), {
+    type:'doughnut',
+    data:{labels:statusLabels, datasets:[{data:statusValues, backgroundColor:statusColors, borderColor:'#fff', borderWidth:2}]},
+    options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}}
+  });
+  buildLegend(document.getElementById('legend-status'), statusLabels, statusValues, statusColors);
+
+  const porDefeito = {};
+  list.forEach(a => porDefeito[a.defeito] = (porDefeito[a.defeito]||0) + 1);
+  charts.defeito = new Chart(document.getElementById('chart-defeito'), {
+    type:'bar',
+    data:{
+      labels:Object.keys(porDefeito),
+      datasets:[{data:Object.values(porDefeito), backgroundColor:'#1B4F91', borderRadius:4, barThickness:14}]
+    },
+    options:{
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{x:{grid:{color:'#EEF1F6'}, ticks:{color:'#6B7789', font:{size:10}}},
+              y:{grid:{display:false}, ticks:{color:'#6B7789', font:{size:10}}}}
+    }
+  });
+
+  const porMes = {};
+  list.filter(a => a.encerrado && a.data_encerramento).forEach(a=>{
+    const mes = a.data_encerramento.slice(0,7);
+    const dias = Math.round((new Date(a.data_encerramento) - new Date(a.data_emissao)) / 86400000);
+    if(!porMes[mes]) porMes[mes] = [];
+    porMes[mes].push(dias);
+  });
+  const meses = Object.keys(porMes).sort();
+  const medias = meses.map(m => (porMes[m].reduce((s,v)=>s+v,0) / porMes[m].length).toFixed(1));
+  charts.tempo = new Chart(document.getElementById('chart-tempo'), {
+    type:'line',
+    data:{
+      labels: meses.length ? meses : ['Sem dados'],
+      datasets:[{data: medias.length ? medias : [0], borderColor:'#1B4F91', backgroundColor:'rgba(27,79,145,0.08)', fill:true, tension:.35, pointRadius:3, pointBackgroundColor:'#1B4F91'}]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{x:{grid:{display:false}, ticks:{color:'#6B7789', font:{size:10}}},
+              y:{grid:{color:'#EEF1F6'}, ticks:{color:'#6B7789', font:{size:10}}}}
+    }
+  });
+}
+
+document.getElementById('refresh-btn').addEventListener('click', loadDashboard);
+document.getElementById('new-alert-btn').addEventListener('click', ()=>{
+  alert('Formulário de novo alerta (implementar insert na tabela alertas_qualidade do Supabase).');
+});
+document.getElementById('hist-btn').addEventListener('click', ()=>{
+  alert('Exibir histórico completo (já disponível via loadFluxo, pode virar um modal detalhado).');
+});
+
+loadDashboard();
+</script>
+</body>
+</html>
 
