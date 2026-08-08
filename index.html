@@ -343,9 +343,10 @@
         </div>
       </div>
 
-      <div class="card" id="pareto-section" style="margin-bottom:16px;">
+      <!-- SEÇÃO ANALISES (PARETO) - isolada por aba -->
+      <div class="card" id="pareto-section" style="display:none; margin-bottom:16px;">
         <h2>Análise de Pareto — Alertas por Tipo de Defeito</h2>
-        <div class="chart-box" style="height:230px;">
+        <div class="chart-box" style="height:280px;">
           <canvas id="chart-pareto" role="img" aria-label="Gráfico de Pareto: ocorrências por tipo de defeito e percentual acumulado">Carregando.</canvas>
         </div>
       </div>
@@ -502,7 +503,7 @@ const VIEW_TITLES = {
 function filterByView(list, view){
   if(view === 'vencidos') return list.filter(a => a.status === 'Vencido');
   if(view === 'encerrados') return list.filter(a => a.encerrado);
-  return list.filter(a => !a.encerrado); // 'abertos' (padrão)
+  return list.filter(a => !a.encerrado);
 }
 
 function fmtDate(iso){
@@ -519,7 +520,6 @@ function diasRestantes(prazoIso){
 async function loadDashboard(preferredId){
   document.getElementById('load-banner').style.display = 'block';
   try{
-    // Consumindo direto da View inteligente do Supabase se disponível, ou da tabela principal
     const { data, error } = await sb
       .from('vw_alertas_dashboard')
       .select('*')
@@ -714,7 +714,9 @@ function buildLegend(el, labels, values, colors){
 }
 
 function renderCharts(list){
-  Object.values(charts).forEach(c => c.destroy());
+  Object.values(charts).forEach(c => {
+    if(c !== charts.pareto) c.destroy();
+  });
 
   const porArea = {};
   list.forEach(a => {
@@ -835,7 +837,7 @@ document.getElementById('hist-btn').addEventListener('click', ()=>{
 });
 
 /* ============================================================
-   MENU LATERAL
+   MENU LATERAL E ABAS
    ============================================================ */
 function exportCSV(){
   if(!alertas.length){ alert('Nenhum dado para exportar ainda.'); return; }
@@ -862,18 +864,35 @@ document.querySelectorAll('nav a[data-view]').forEach(link => {
 
     if(view === 'relatorios'){
       exportCSV();
-      return; // ação pontual, não muda a página ativa
+      return;
     }
 
     document.querySelectorAll('nav a[data-view]').forEach(a => a.classList.remove('active'));
     link.classList.add('active');
 
-    if(view === 'indicadores'){
-      document.querySelector('.chart-row').scrollIntoView({ behavior:'smooth', block:'start' });
+    const paretoSec = document.getElementById('pareto-section');
+    const tableCard = document.querySelector('.grid-main');
+    const chartRow = document.querySelector('.chart-row');
+    const bottomRow = document.querySelector('.bottom-row');
+
+    if(view === 'analises'){
+      // Oculta Visão Geral e exibe apenas o Pareto isolado
+      tableCard.style.display = 'none';
+      chartRow.style.display = 'none';
+      bottomRow.style.display = 'none';
+      paretoSec.style.display = 'block';
+      if(charts.pareto) charts.pareto.update();
       return;
     }
-    if(view === 'analises'){
-      document.getElementById('pareto-section').scrollIntoView({ behavior:'smooth', block:'start' });
+
+    // Retorna elementos visíveis para as outras abas
+    tableCard.style.display = 'grid';
+    chartRow.style.display = 'grid';
+    bottomRow.style.display = 'grid';
+    paretoSec.style.display = 'none';
+
+    if(view === 'indicadores'){
+      chartRow.scrollIntoView({ behavior:'smooth', block:'start' });
       return;
     }
 
@@ -899,7 +918,6 @@ document.getElementById('advance-flow-btn').addEventListener('click', async () =
   if(!proxima) return;
 
   if(proxima === 'Ação Definida'){
-    // Etapa exige detalhamento: abre formulário em vez de gravar direto
     acaoForm.reset();
     acaoFormError.style.display = 'none';
     const alertaAtual = alertas.find(a => a.id === currentAlertId);
@@ -1009,7 +1027,7 @@ newAlertForm.addEventListener('submit', async (e)=>{
   e.preventDefault();
   formError.style.display = 'none';
   formSuccess.style.display = 'none';
-    btnSave.disabled = true;
+  btnSave.disabled = true;
   btnSave.textContent = 'Salvando...';
 
   const novoAlerta = {
