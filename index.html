@@ -426,11 +426,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-/* ============================================================
-   CONFIGURAÇÃO DO SUPABASE
-   Substitua pelos valores do seu projeto em:
-   Project Settings > API > Project URL / anon public key
-   ============================================================ */
 const SUPABASE_URL = 'https://ubacpidlqltwzyjpaqdz.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InViYWNwaWRscWx0d3p5anBhcWR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxMzg4MTksImV4cCI6MjA5OTcxNDgxOX0.ySBvc9I19rYJkoLeVkVmlaDbtaEky_EzbUytWVW_dAk';
 
@@ -482,7 +477,7 @@ async function loadDashboard(){
   }catch(err){
     console.error('Erro ao carregar dados do Supabase:', err);
     document.getElementById('load-banner').textContent =
-      'Não foi possível carregar os dados. Verifique SUPABASE_URL e SUPABASE_ANON_KEY.';
+      'Não foi possível carregar os dados. Verifique a conexão.';
     return;
   }
   document.getElementById('load-banner').style.display = 'none';
@@ -517,30 +512,31 @@ function renderTable(list){
     const tr = document.createElement('tr');
     tr.style.cursor = 'pointer';
     tr.innerHTML = `
-      <td><b>${a.numero_aq}</b></td><td>${a.produto}</td><td>${a.lote}</td><td>${a.defeito}</td>
-      <td>${a.area_responsavel}</td><td>${a.responsavel}</td><td>${fmtDate(a.prazo)}</td>
-      <td>${a.dias}</td><td><span class="badge ${cls}">${a.status}</span></td>`;
+      <td><b>${a.numero_aq || '-'}</b></td><td>${a.produto_codigo || '-'}</td><td>${a.lote || '-'}</td><td>${a.defeito_detectado || '-'}</td>
+      <td>${a.area_responsavel || '-'}</td><td>${a.responsavel || '-'}</td><td>${fmtDate(a.prazo)}</td>
+      <td>${a.dias !== undefined ? a.dias : '-'}</td><td><span class="badge ${cls}">${a.status || 'Em dia'}</span></td>`;
     tr.addEventListener('click', ()=>showDetail(a));
     tbody.appendChild(tr);
   });
 }
 
 async function showDetail(a){
-  document.getElementById('d-id').textContent = a.numero_aq;
-  document.getElementById('d-defeito').textContent = a.defeito;
-  document.getElementById('d-produto').textContent = a.produto;
-  document.getElementById('d-lote').textContent = a.lote;
-  document.getElementById('d-area').textContent = a.area_responsavel;
-  document.getElementById('d-resp').textContent = a.responsavel;
+  document.getElementById('d-id').textContent = a.numero_aq || '-';
+  document.getElementById('d-defeito').textContent = a.defeito_detectado || '-';
+  document.getElementById('d-produto').textContent = a.produto_codigo || '-';
+  document.getElementById('d-lote').textContent = a.lote || '-';
+  document.getElementById('d-area').textContent = a.area_responsavel || '-';
+  document.getElementById('d-resp').textContent = a.responsavel || '-';
   document.getElementById('d-emissao').textContent = fmtDate(a.data_emissao);
   document.getElementById('d-prazo').textContent = fmtDate(a.prazo);
-  document.getElementById('d-dias').textContent = a.dias;
+  document.getElementById('d-dias').textContent = a.dias !== undefined ? a.dias : '-';
   document.getElementById('d-acao').textContent = a.acao_contencao || '-';
   document.getElementById('d-obs').textContent = a.observacoes || 'Sem observações registradas.';
 
-  const cls = STATUS_CLASS[a.status] || 'emdia';
+  const statusAtual = a.status || 'Em dia';
+  const cls = STATUS_CLASS[statusAtual] || 'emdia';
   const st = document.getElementById('d-status');
-  st.textContent = a.status;
+  st.textContent = statusAtual;
   st.className = 'badge ' + cls;
   document.getElementById('d-prazo').className = 'v' + (cls === 'vencido' ? ' red' : '');
 
@@ -584,7 +580,7 @@ async function loadFluxo(alertaId){
 async function loadReminders(){
   const { data, error } = await sb
     .from('lembretes')
-    .select('*, alertas_qualidade(numero_aq)')
+    .select('*')
     .order('data_envio', { ascending: false })
     .limit(10);
 
@@ -596,11 +592,11 @@ async function loadReminders(){
   tbody.innerHTML = data.map(r=>{
     const cls = r.status === 'Enviado' ? 'enviado' : 'agendado';
     return `<tr>
-      <td><b>${r.alertas_qualidade?.numero_aq || '-'}</b></td>
-      <td class="msg">${r.mensagem}</td>
-      <td>${new Date(r.data_envio).toLocaleString('pt-BR')}</td>
-      <td>${r.destinatario}</td>
-      <td><span class="badge ${cls}">${r.status.toUpperCase()}</span></td>
+      <td><b>-</b></td>
+      <td class="msg">${r.mensagem || '-'}</td>
+      <td>${r.data_envio ? new Date(r.data_envio).toLocaleString('pt-BR') : '-'}</td>
+      <td>${r.destinatario || '-'}</td>
+      <td><span class="badge ${cls}">${(r.status || 'Agendado').toUpperCase()}</span></td>
     </tr>`;
   }).join('');
 }
@@ -617,7 +613,10 @@ function renderCharts(list){
   Object.values(charts).forEach(c => c.destroy());
 
   const porArea = {};
-  list.forEach(a => porArea[a.area_responsavel] = (porArea[a.area_responsavel]||0) + 1);
+  list.forEach(a => {
+    const area = a.area_responsavel || 'Não definida';
+    porArea[area] = (porArea[area]||0) + 1;
+  });
   const areaLabels = Object.keys(porArea);
   const areaValues = Object.values(porArea);
   charts.area = new Chart(document.getElementById('chart-area'), {
@@ -628,7 +627,10 @@ function renderCharts(list){
   buildLegend(document.getElementById('legend-area'), areaLabels, areaValues, AREA_COLORS);
 
   const porStatus = {};
-  list.forEach(a => porStatus[a.status] = (porStatus[a.status]||0) + 1);
+  list.forEach(a => {
+    const st = a.status || 'Em dia';
+    porStatus[st] = (porStatus[st]||0) + 1;
+  });
   const statusLabels = Object.keys(porStatus);
   const statusValues = Object.values(porStatus);
   const statusColors = statusLabels.map(l => STATUS_COLORS[l] || '#8E93A0');
@@ -640,7 +642,10 @@ function renderCharts(list){
   buildLegend(document.getElementById('legend-status'), statusLabels, statusValues, statusColors);
 
   const porDefeito = {};
-  list.forEach(a => porDefeito[a.defeito] = (porDefeito[a.defeito]||0) + 1);
+  list.forEach(a => {
+    const def = a.defeito_detectado || 'Outros';
+    porDefeito[def] = (porDefeito[def]||0) + 1;
+  });
   charts.defeito = new Chart(document.getElementById('chart-defeito'), {
     type:'bar',
     data:{
@@ -681,12 +686,9 @@ function renderCharts(list){
 
 document.getElementById('refresh-btn').addEventListener('click', loadDashboard);
 document.getElementById('hist-btn').addEventListener('click', ()=>{
-  alert('Exibir histórico completo (já disponível via loadFluxo, pode virar um modal detalhado).');
+  alert('Exibir histórico completo.');
 });
 
-/* ============================================================
-   MODAL: Novo Alerta de Qualidade
-   ============================================================ */
 const modalOverlay = document.getElementById('modal-overlay');
 const newAlertForm = document.getElementById('new-alert-form');
 const formError = document.getElementById('form-error');
@@ -706,7 +708,7 @@ function closeModal(){
 document.getElementById('new-alert-btn').addEventListener('click', openModal);
 document.getElementById('btn-cancel').addEventListener('click', closeModal);
 modalOverlay.addEventListener('click', (e)=>{
-  if(e.target === modalOverlay) closeModal(); // fecha se clicar fora da caixa
+  if(e.target === modalOverlay) closeModal();
 });
 
 newAlertForm.addEventListener('submit', async (e)=>{
@@ -718,9 +720,9 @@ newAlertForm.addEventListener('submit', async (e)=>{
 
   const novoAlerta = {
     numero_aq: document.getElementById('f-numero').value.trim(),
-    produto_codigo: document.getElementById('f-produto').value.trim(), // <--- Alterado de 'produto' para 'produto_codigo'
+    produto_codigo: document.getElementById('f-produto').value.trim(),
     lote: document.getElementById('f-lote').value.trim(),
-    defeito_detectado: document.getElementById('f-defeito').value.trim(), // <--- Alterado de 'defeito' para 'defeito_detectado'
+    defeito_detectado: document.getElementById('f-defeito').value.trim(),
     area_responsavel: document.getElementById('f-area').value,
     responsavel: document.getElementById('f-responsavel').value.trim(),
     prazo: document.getElementById('f-prazo').value,
@@ -738,7 +740,6 @@ newAlertForm.addEventListener('submit', async (e)=>{
       .select();
     if(error) throw error;
 
-    // Registra a primeira etapa do fluxo de tratativas para o novo alerta
     if(data && data[0]){
       await sb.from('fluxo_tratativas').insert([{
         alerta_id: data[0].id,
