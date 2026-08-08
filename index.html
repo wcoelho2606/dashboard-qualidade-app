@@ -116,7 +116,6 @@
   .badge.andamento{background:#DCE7FB;color:#1B4F91;}
   .badge.aguardando{background:#EAE9F2;color:#5C5A78;}
   .badge.encerrado{background:#DCF3E5;color:#237A4C;}
-  .badge.enviado-red{background:#FBDEDE;color:#B22C2C;}
   .badge.enviado{background:#DCF3E5;color:#237A4C;}
   .badge.agendado{background:#DCE7FB;color:#1B4F91;}
 
@@ -458,13 +457,14 @@ function diasRestantes(prazoIso){
 async function loadDashboard(){
   document.getElementById('load-banner').style.display = 'block';
   try{
+    // Consumindo direto da View inteligente do Supabase se disponível, ou da tabela principal
     const { data, error } = await sb
-      .from('alertas_qualidade')
+      .from('vw_alertas_dashboard')
       .select('*')
       .order('prazo', { ascending: true });
     if(error) throw error;
 
-    alertas = (data || []).map(a => ({...a, dias: diasRestantes(a.prazo)}));
+    alertas = (data || []).map(a => ({...a, status: a.status_calculado || a.status, dias: a.dias_restantes ?? diasRestantes(a.prazo)}));
 
     renderKpis(alertas);
     renderTable(alertas.filter(a => !a.encerrado));
@@ -512,7 +512,7 @@ function renderTable(list){
     const tr = document.createElement('tr');
     tr.style.cursor = 'pointer';
     tr.innerHTML = `
-      <td><b>${a.numero_aq || '-'}</b></td><td>${a.produto_codigo || '-'}</td><td>${a.lote || '-'}</td><td>${a.defeito_detectado || '-'}</td>
+      <td><b>${a.numero_aq || '-'}</b></td><td>${a.produto || '-'}</td><td>${a.lote || '-'}</td><td>${a.defeito || '-'}</td>
       <td>${a.area_responsavel || '-'}</td><td>${a.responsavel || '-'}</td><td>${fmtDate(a.prazo)}</td>
       <td>${a.dias !== undefined ? a.dias : '-'}</td><td><span class="badge ${cls}">${a.status || 'Em dia'}</span></td>`;
     tr.addEventListener('click', ()=>showDetail(a));
@@ -522,8 +522,8 @@ function renderTable(list){
 
 async function showDetail(a){
   document.getElementById('d-id').textContent = a.numero_aq || '-';
-  document.getElementById('d-defeito').textContent = a.defeito_detectado || '-';
-  document.getElementById('d-produto').textContent = a.produto_codigo || '-';
+  document.getElementById('d-defeito').textContent = a.defeito || '-';
+  document.getElementById('d-produto').textContent = a.produto || '-';
   document.getElementById('d-lote').textContent = a.lote || '-';
   document.getElementById('d-area').textContent = a.area_responsavel || '-';
   document.getElementById('d-resp').textContent = a.responsavel || '-';
@@ -580,7 +580,7 @@ async function loadFluxo(alertaId){
 async function loadReminders(){
   const { data, error } = await sb
     .from('lembretes')
-    .select('*')
+    .select('*, alertas_qualidade(numero_aq)')
     .order('data_envio', { ascending: false })
     .limit(10);
 
@@ -592,7 +592,7 @@ async function loadReminders(){
   tbody.innerHTML = data.map(r=>{
     const cls = r.status === 'Enviado' ? 'enviado' : 'agendado';
     return `<tr>
-      <td><b>-</b></td>
+      <td><b>${r.alertas_qualidade?.numero_aq || '-'}</b></td>
       <td class="msg">${r.mensagem || '-'}</td>
       <td>${r.data_envio ? new Date(r.data_envio).toLocaleString('pt-BR') : '-'}</td>
       <td>${r.destinatario || '-'}</td>
@@ -643,7 +643,7 @@ function renderCharts(list){
 
   const porDefeito = {};
   list.forEach(a => {
-    const def = a.defeito_detectado || 'Outros';
+    const def = a.defeito || 'Outros';
     porDefeito[def] = (porDefeito[def]||0) + 1;
   });
   charts.defeito = new Chart(document.getElementById('chart-defeito'), {
@@ -715,14 +715,14 @@ newAlertForm.addEventListener('submit', async (e)=>{
   e.preventDefault();
   formError.style.display = 'none';
   formSuccess.style.display = 'none';
-  btnSave.disabled = true;
+    btnSave.disabled = true;
   btnSave.textContent = 'Salvando...';
 
   const novoAlerta = {
     numero_aq: document.getElementById('f-numero').value.trim(),
-    produto_codigo: document.getElementById('f-produto').value.trim(),
+    produto: document.getElementById('f-produto').value.trim(),
     lote: document.getElementById('f-lote').value.trim(),
-    defeito_detectado: document.getElementById('f-defeito').value.trim(),
+    defeito: document.getElementById('f-defeito').value.trim(),
     area_responsavel: document.getElementById('f-area').value,
     responsavel: document.getElementById('f-responsavel').value.trim(),
     prazo: document.getElementById('f-prazo').value,
