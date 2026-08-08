@@ -343,9 +343,17 @@
         </div>
       </div>
 
+      <div class="card" id="pareto-section" style="margin-bottom:16px;">
+        <h2>Análise de Pareto — Alertas por Tipo de Defeito</h2>
+        <div class="chart-box" style="height:230px;">
+          <canvas id="chart-pareto" role="img" aria-label="Gráfico de Pareto: ocorrências por tipo de defeito e percentual acumulado">Carregando.</canvas>
+        </div>
+      </div>
+
       <div class="bottom-row">
         <div class="card">
           <h2>Fluxo de Tratativas</h2>
+          <div class="detail-sub" id="flow-alert-label" style="margin-bottom:8px;">Selecione um alerta na tabela.</div>
           <div class="flow" id="flow"><div class="empty-hint">Selecione um alerta na tabela para ver o histórico.</div></div>
           <button class="hist-btn" id="advance-flow-btn" style="margin-top:14px;" disabled>Selecione um alerta</button>
         </div>
@@ -418,6 +426,43 @@
         <div class="modal-actions">
           <button type="button" class="btn-cancel" id="btn-cancel">Cancelar</button>
           <button type="submit" class="btn-save" id="btn-save">Salvar Alerta</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Ação Definida (causa, tipo de ação, responsáveis) -->
+  <div class="modal-overlay" id="modal-acao-overlay">
+    <div class="modal-box">
+      <h2>Definir Ação Corretiva</h2>
+      <p class="modal-sub" id="modal-acao-sub">Preencha os dados da análise para o alerta.</p>
+      <form id="acao-form">
+        <div class="form-grid">
+          <div class="form-field full">
+            <label for="fa-causa">Causa Identificada (após análise)</label>
+            <textarea id="fa-causa" placeholder="Descreva a causa raiz encontrada" required></textarea>
+          </div>
+          <div class="form-field full">
+            <label for="fa-tipo">Ação Definida</label>
+            <select id="fa-tipo" required>
+              <option value="">Selecione</option>
+              <option>Ajuste no Processo</option>
+              <option>Ajuste Ferramental</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label for="fa-impl">Responsável pela Implementação</label>
+            <input type="text" id="fa-impl" placeholder="Nome do responsável" required>
+          </div>
+          <div class="form-field">
+            <label for="fa-valid">Responsável pela Validação (Qualidade)</label>
+            <input type="text" id="fa-valid" placeholder="Nome do responsável" required>
+          </div>
+        </div>
+        <div class="form-error" id="acao-form-error"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn-cancel" id="acao-btn-cancel">Cancelar</button>
+          <button type="submit" class="btn-save" id="acao-btn-save">Salvar e Avançar</button>
         </div>
       </form>
     </div>
@@ -560,6 +605,9 @@ async function showDetail(a){
   st.className = 'badge ' + cls;
   document.getElementById('d-prazo').className = 'v' + (cls === 'vencido' ? ' red' : '');
 
+  const flowLabel = document.getElementById('flow-alert-label');
+  if(flowLabel) flowLabel.textContent = `Fluxo do alerta ${a.numero_aq} — ${a.defeito}`;
+
   await loadFluxo(a.id);
 }
 
@@ -589,15 +637,27 @@ async function loadFluxo(alertaId){
     'Em Implementação':'#8E6BC9','Aguardando Validação':'#8E93A0','Encerrado':'#3FA76B'
   };
 
-  flowEl.innerHTML = data.map(f => `
-    <div class="flow-step">
+  flowEl.innerHTML = data.map(f => {
+    let extra = '';
+    if(f.etapa === 'Ação Definida' && (f.tipo_acao || f.responsavel_implementacao || f.responsavel_validacao)){
+      const partes = [];
+      if(f.tipo_acao) partes.push(f.tipo_acao);
+      if(f.responsavel_implementacao) partes.push('Impl.: ' + f.responsavel_implementacao);
+      if(f.responsavel_validacao) partes.push('Valid.: ' + f.responsavel_validacao);
+      extra = `<div class="fdate" style="margin-top:2px;">${partes.join(' • ')}</div>`;
+    }
+    const titleAttr = f.causa_raiz ? ` title="Causa: ${f.causa_raiz.replace(/"/g,'&quot;')}"` : '';
+    return `
+    <div class="flow-step"${titleAttr}>
       <div class="flow-line"></div>
       <div class="circle" style="background:${COLORS[f.etapa] || '#8E93A0'}">
         <i class="fa-solid ${ICONS[f.etapa] || 'fa-circle'}"></i>
       </div>
       <div class="fname">${f.etapa}<br>${f.responsavel_etapa || ''}</div>
       <div class="fdate">${new Date(f.data_hora).toLocaleString('pt-BR')}</div>
-    </div>`).join('');
+      ${extra}
+    </div>`;
+  }).join('');
 
   currentFlowStage = data[data.length - 1].etapa;
   updateAdvanceButton();
@@ -726,6 +786,47 @@ function renderCharts(list){
               y:{grid:{color:'#EEF1F6'}, ticks:{color:'#6B7789', font:{size:10}}}}
     }
   });
+
+  renderParetoChart(porDefeito);
+}
+
+function renderParetoChart(porDefeito){
+  const ordenado = Object.entries(porDefeito).sort((a,b) => b[1] - a[1]);
+  const labels = ordenado.map(o => o[0]);
+  const counts = ordenado.map(o => o[1]);
+  const total = counts.reduce((s,v) => s+v, 0) || 1;
+  let acumulado = 0;
+  const percentAcumulado = counts.map(c => {
+    acumulado += c;
+    return +((acumulado / total) * 100).toFixed(1);
+  });
+
+  if(charts.pareto) charts.pareto.destroy();
+  charts.pareto = new Chart(document.getElementById('chart-pareto'), {
+    data:{
+      labels,
+      datasets:[
+        {
+          type:'bar', label:'Ocorrências', data:counts,
+          backgroundColor:'#1B4F91', borderRadius:4, order:2, yAxisID:'y'
+        },
+        {
+          type:'line', label:'% Acumulado', data:percentAcumulado,
+          borderColor:'#E8A33D', backgroundColor:'#E8A33D', tension:.3,
+          pointRadius:3, pointBackgroundColor:'#E8A33D', order:1, yAxisID:'y1'
+        }
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ display:true, position:'bottom', labels:{ boxWidth:10, font:{size:10}, color:'#6B7789' } } },
+      scales:{
+        x:{ grid:{display:false}, ticks:{color:'#6B7789', font:{size:10}} },
+        y:{ position:'left', grid:{color:'#EEF1F6'}, ticks:{color:'#6B7789', font:{size:10}}, title:{display:true, text:'Ocorrências', color:'#6B7789', font:{size:10}} },
+        y1:{ position:'right', min:0, max:100, grid:{drawOnChartArea:false}, ticks:{color:'#6B7789', font:{size:10}, callback:v=>v+'%'} }
+      }
+    }
+  });
 }
 
 document.getElementById('refresh-btn').addEventListener('click', ()=>loadDashboard(currentAlertId));
@@ -767,9 +868,13 @@ document.querySelectorAll('nav a[data-view]').forEach(link => {
     document.querySelectorAll('nav a[data-view]').forEach(a => a.classList.remove('active'));
     link.classList.add('active');
 
-    if(view === 'indicadores' || view === 'analises'){
+    if(view === 'indicadores'){
       document.querySelector('.chart-row').scrollIntoView({ behavior:'smooth', block:'start' });
-      return; // não filtra a tabela, só rola até os gráficos
+      return;
+    }
+    if(view === 'analises'){
+      document.getElementById('pareto-section').scrollIntoView({ behavior:'smooth', block:'start' });
+      return;
     }
 
     currentView = (view === 'visao') ? 'abertos' : view;
@@ -782,13 +887,68 @@ document.querySelectorAll('nav a[data-view]').forEach(link => {
 /* ============================================================
    FLUXO DE TRATATIVAS: avançar etapa
    ============================================================ */
+const modalAcaoOverlay = document.getElementById('modal-acao-overlay');
+const acaoForm = document.getElementById('acao-form');
+const acaoFormError = document.getElementById('acao-form-error');
+const acaoBtnSave = document.getElementById('acao-btn-save');
+
 document.getElementById('advance-flow-btn').addEventListener('click', async () => {
   if(!currentAlertId) return;
   const idx = currentFlowStage ? FLOW_ORDER.indexOf(currentFlowStage) : -1;
   const proxima = FLOW_ORDER[idx + 1];
   if(!proxima) return;
 
+  if(proxima === 'Ação Definida'){
+    // Etapa exige detalhamento: abre formulário em vez de gravar direto
+    acaoForm.reset();
+    acaoFormError.style.display = 'none';
+    const alertaAtual = alertas.find(a => a.id === currentAlertId);
+    document.getElementById('modal-acao-sub').textContent = alertaAtual
+      ? `Alerta ${alertaAtual.numero_aq} — ${alertaAtual.defeito}`
+      : 'Preencha os dados da análise.';
+    modalAcaoOverlay.classList.add('open');
+    return;
+  }
+
+  await avancarEtapa(proxima, {});
+});
+
+document.getElementById('acao-btn-cancel').addEventListener('click', () => {
+  modalAcaoOverlay.classList.remove('open');
+});
+modalAcaoOverlay.addEventListener('click', (e) => {
+  if(e.target === modalAcaoOverlay) modalAcaoOverlay.classList.remove('open');
+});
+
+acaoForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  acaoFormError.style.display = 'none';
+  acaoBtnSave.disabled = true;
+  acaoBtnSave.textContent = 'Salvando...';
+
+  const detalhes = {
+    causa_raiz: document.getElementById('fa-causa').value.trim(),
+    tipo_acao: document.getElementById('fa-tipo').value,
+    responsavel_implementacao: document.getElementById('fa-impl').value.trim(),
+    responsavel_validacao: document.getElementById('fa-valid').value.trim()
+  };
+
+  const ok = await avancarEtapa('Ação Definida', detalhes);
+
+  acaoBtnSave.disabled = false;
+  acaoBtnSave.textContent = 'Salvar e Avançar';
+
+  if(ok){
+    modalAcaoOverlay.classList.remove('open');
+  }else{
+    acaoFormError.textContent = 'Não foi possível salvar. Tente novamente.';
+    acaoFormError.style.display = 'block';
+  }
+});
+
+async function avancarEtapa(proxima, detalhes){
   const btn = document.getElementById('advance-flow-btn');
+  const textoOriginal = btn.textContent;
   btn.disabled = true;
   btn.textContent = 'Salvando...';
 
@@ -797,7 +957,8 @@ document.getElementById('advance-flow-btn').addEventListener('click', async () =
       alerta_id: currentAlertId,
       etapa: proxima,
       responsavel_etapa: 'Qualidade',
-      data_hora: new Date().toISOString()
+      data_hora: new Date().toISOString(),
+      ...detalhes
     }]);
     if(errFluxo) throw errFluxo;
 
@@ -811,12 +972,16 @@ document.getElementById('advance-flow-btn').addEventListener('click', async () =
     }
 
     await loadDashboard(currentAlertId);
+    return true;
   }catch(err){
     console.error('Erro ao avançar etapa:', err);
     alert('Não foi possível avançar a etapa. Tente novamente.');
+    btn.disabled = false;
+    btn.textContent = textoOriginal;
     updateAdvanceButton();
+    return false;
   }
-});
+}
 
 const modalOverlay = document.getElementById('modal-overlay');
 const newAlertForm = document.getElementById('new-alert-form');
