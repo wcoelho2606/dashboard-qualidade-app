@@ -718,9 +718,9 @@ newAlertForm.addEventListener('submit', async (e)=>{
 
   const novoAlerta = {
     numero_aq: document.getElementById('f-numero').value.trim(),
-    produto: document.getElementById('f-produto').value.trim(),
+    produto_codigo: document.getElementById('f-produto').value.trim(), // <--- Alterado de 'produto' para 'produto_codigo'
     lote: document.getElementById('f-lote').value.trim(),
-    defeito: document.getElementById('f-defeito').value.trim(),
+    defeito_detectado: document.getElementById('f-defeito').value.trim(), // <--- Alterado de 'defeito' para 'defeito_detectado'
     area_responsavel: document.getElementById('f-area').value,
     responsavel: document.getElementById('f-responsavel').value.trim(),
     prazo: document.getElementById('f-prazo').value,
