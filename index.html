@@ -152,6 +152,13 @@
   .legend i{width:8px;height:8px;border-radius:2px;display:inline-block;}
 
   .bottom-row{display:grid;grid-template-columns:1.1fr 1fr;gap:16px;}
+  .flow-search-box{margin-bottom:10px;}
+  .flow-search-box select{
+    width:100%;border:1px solid var(--border);border-radius:8px;padding:8px 10px;
+    font-size:12px;font-family:inherit;color:var(--text);background:#F7F9FC;outline:none;
+  }
+  .flow-search-box select:focus{border-color:var(--blue-light);}
+
   .flow{display:flex;align-items:flex-start;justify-content:space-between;margin-top:6px;}
   .flow-step{display:flex;flex-direction:column;align-items:center;text-align:center;flex:1;position:relative;}
   .flow-step .circle{
@@ -354,8 +361,12 @@
       <div class="bottom-row">
         <div class="card">
           <h2>Fluxo de Tratativas</h2>
-          <div class="detail-sub" id="flow-alert-label" style="margin-bottom:8px;">Selecione um alerta na tabela.</div>
-          <div class="flow" id="flow"><div class="empty-hint">Selecione um alerta na tabela para ver o histórico.</div></div>
+          <div class="flow-search-box">
+            <select id="flow-alert-select">
+              <option value="">🔍 Buscar/Selecionar Alerta para o Fluxo...</option>
+            </select>
+          </div>
+          <div class="flow" id="flow"><div class="empty-hint">Selecione um alerta acima ou na tabela.</div></div>
           <button class="hist-btn" id="advance-flow-btn" style="margin-top:14px;" disabled>Selecione um alerta</button>
         </div>
         <div class="card">
@@ -531,6 +542,7 @@ async function loadDashboard(preferredId){
     renderKpis(alertas);
     renderTable(filterByView(alertas, currentView));
     renderCharts(alertas);
+    populateFlowSelect();
     await loadReminders();
 
     if(alertas.length){
@@ -546,6 +558,13 @@ async function loadDashboard(preferredId){
     return;
   }
   document.getElementById('load-banner').style.display = 'none';
+}
+
+function populateFlowSelect(){
+  const select = document.getElementById('flow-alert-select');
+  if(!select) return;
+  select.innerHTML = '<option value="">🔍 Buscar/Selecionar Alerta para o Fluxo...</option>' +
+    alertas.map(a => `<option value="${a.id}" ${a.id === currentAlertId ? 'selected' : ''}>${a.numero_aq} - ${a.defeito} (${a.area_responsavel})</option>`).join('');
 }
 
 function renderKpis(list){
@@ -586,6 +605,7 @@ function renderTable(list){
 }
 
 async function showDetail(a){
+  currentAlertId = a.id;
   document.getElementById('d-id').textContent = a.numero_aq || '-';
   document.getElementById('d-defeito').textContent = a.defeito || '-';
   document.getElementById('d-produto').textContent = a.produto || '-';
@@ -605,11 +625,20 @@ async function showDetail(a){
   st.className = 'badge ' + cls;
   document.getElementById('d-prazo').className = 'v' + (cls === 'vencido' ? ' red' : '');
 
-  const flowLabel = document.getElementById('flow-alert-label');
-  if(flowLabel) flowLabel.textContent = `Fluxo do alerta ${a.numero_aq} — ${a.defeito}`;
+  const selectEl = document.getElementById('flow-alert-select');
+  if(selectEl) selectEl.value = a.id;
 
   await loadFluxo(a.id);
 }
+
+document.getElementById('flow-alert-select').addEventListener('change', (e)=>{
+  const id = e.target.value;
+  if(!id) return;
+  const target = alertas.find(a => a.id === id);
+  if(target){
+    showDetail(target);
+  }
+});
 
 async function loadFluxo(alertaId){
   currentAlertId = alertaId;
@@ -876,7 +905,6 @@ document.querySelectorAll('nav a[data-view]').forEach(link => {
     const bottomRow = document.querySelector('.bottom-row');
 
     if(view === 'analises'){
-      // Oculta Visão Geral e exibe apenas o Pareto isolado
       tableCard.style.display = 'none';
       chartRow.style.display = 'none';
       bottomRow.style.display = 'none';
@@ -885,7 +913,6 @@ document.querySelectorAll('nav a[data-view]').forEach(link => {
       return;
     }
 
-    // Retorna elementos visíveis para as outras abas
     tableCard.style.display = 'grid';
     chartRow.style.display = 'grid';
     bottomRow.style.display = 'grid';
