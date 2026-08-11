@@ -483,19 +483,61 @@
               <option>Ajuste Ferramental</option>
             </select>
           </div>
-          <div class="form-field">
+          <div class="form-field full">
             <label for="fa-impl">Responsável pela Implementação</label>
             <input type="text" id="fa-impl" placeholder="Nome do responsável" required>
-          </div>
-          <div class="form-field">
-            <label for="fa-valid">Responsável pela Validação (Qualidade)</label>
-            <input type="text" id="fa-valid" placeholder="Nome do responsável" required>
           </div>
         </div>
         <div class="form-error" id="acao-form-error"></div>
         <div class="modal-actions">
           <button type="button" class="btn-cancel" id="acao-btn-cancel">Cancelar</button>
           <button type="submit" class="btn-save" id="acao-btn-save">Salvar e Avançar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Em Implementação -->
+  <div class="modal-overlay" id="modal-impl-overlay">
+    <div class="modal-box">
+      <h2>Iniciar Implementação</h2>
+      <p class="modal-sub" id="modal-impl-sub">Preencha o prazo para implementação da correção.</p>
+      <form id="impl-form">
+        <div class="form-grid">
+          <div class="form-field full">
+            <label>Responsável pela Implementação</label>
+            <div class="detail-note" id="impl-responsavel-display">-</div>
+          </div>
+          <div class="form-field full">
+            <label for="fi-prazo">Prazo para Implementação da Correção</label>
+            <input type="date" id="fi-prazo" required>
+          </div>
+        </div>
+        <div class="form-error" id="impl-form-error"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn-cancel" id="impl-btn-cancel">Cancelar</button>
+          <button type="submit" class="btn-save" id="impl-btn-save">Salvar e Avançar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Aguardando Validação -->
+  <div class="modal-overlay" id="modal-valid-overlay">
+    <div class="modal-box">
+      <h2>Encaminhar para Validação</h2>
+      <p class="modal-sub" id="modal-valid-sub">Informe a data prevista para a validação da Qualidade.</p>
+      <form id="valid-form">
+        <div class="form-grid">
+          <div class="form-field full">
+            <label for="fv-data">Data em que Será Validado</label>
+            <input type="date" id="fv-data" required>
+          </div>
+        </div>
+        <div class="form-error" id="valid-form-error"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn-cancel" id="valid-btn-cancel">Cancelar</button>
+          <button type="submit" class="btn-save" id="valid-btn-save">Salvar e Avançar</button>
         </div>
       </form>
     </div>
@@ -524,6 +566,7 @@ let charts = {};
 let currentView = 'visao';
 let currentAlertId = null;
 let currentFlowStage = null;
+let currentFlowData = [];
 
 const FLOW_ORDER = ['Alerta Emitido','Em Análise','Ação Definida','Em Implementação','Aguardando Validação','Encerrado'];
 const VIEW_TITLES = {
@@ -690,9 +733,12 @@ async function loadFluxo(alertaId){
   if(error || !data || !data.length){
     flowEl.innerHTML = '<div class="empty-hint">Nenhuma etapa registrada ainda para este alerta.</div>';
     currentFlowStage = null;
+    currentFlowData = [];
     updateAdvanceButton();
     return;
   }
+
+  currentFlowData = data;
 
   const ICONS = {
     'Alerta Emitido':'fa-file-circle-plus','Em Análise':'fa-magnifying-glass',
@@ -706,12 +752,15 @@ async function loadFluxo(alertaId){
 
   flowEl.innerHTML = data.map(f => {
     let extra = '';
-    if(f.etapa === 'Ação Definida' && (f.tipo_acao || f.responsavel_implementacao || f.responsavel_validacao)){
+    if(f.etapa === 'Ação Definida' && (f.tipo_acao || f.responsavel_implementacao)){
       const partes = [];
       if(f.tipo_acao) partes.push(f.tipo_acao);
       if(f.responsavel_implementacao) partes.push('Impl.: ' + f.responsavel_implementacao);
-      if(f.responsavel_validacao) partes.push('Valid.: ' + f.responsavel_validacao);
       extra = `<div class="fdate" style="margin-top:2px;">${partes.join(' • ')}</div>`;
+    } else if(f.etapa === 'Em Implementação' && f.prazo_implementacao){
+      extra = `<div class="fdate" style="margin-top:2px;">Prazo: ${fmtDate(f.prazo_implementacao)}</div>`;
+    } else if(f.etapa === 'Aguardando Validação' && f.data_validacao){
+      extra = `<div class="fdate" style="margin-top:2px;">Validação: ${fmtDate(f.data_validacao)}</div>`;
     }
     const titleAttr = f.causa_raiz ? ` title="Causa: ${f.causa_raiz.replace(/"/g,'&quot;')}"` : '';
     return `
@@ -984,6 +1033,21 @@ const acaoForm = document.getElementById('acao-form');
 const acaoFormError = document.getElementById('acao-form-error');
 const acaoBtnSave = document.getElementById('acao-btn-save');
 
+const modalImplOverlay = document.getElementById('modal-impl-overlay');
+const implForm = document.getElementById('impl-form');
+const implFormError = document.getElementById('impl-form-error');
+const implBtnSave = document.getElementById('impl-btn-save');
+
+const modalValidOverlay = document.getElementById('modal-valid-overlay');
+const validForm = document.getElementById('valid-form');
+const validFormError = document.getElementById('valid-form-error');
+const validBtnSave = document.getElementById('valid-btn-save');
+
+function nomeAlertaAtual(){
+  const a = alertas.find(x => x.id === currentAlertId);
+  return a ? `Alerta ${a.numero_aq} — ${a.defeito}` : '';
+}
+
 document.getElementById('advance-flow-btn').addEventListener('click', async () => {
   if(!currentAlertId) return;
   const idx = currentFlowStage ? FLOW_ORDER.indexOf(currentFlowStage) : -1;
@@ -993,11 +1057,28 @@ document.getElementById('advance-flow-btn').addEventListener('click', async () =
   if(proxima === 'Ação Definida'){
     acaoForm.reset();
     acaoFormError.style.display = 'none';
-    const alertaAtual = alertas.find(a => a.id === currentAlertId);
-    document.getElementById('modal-acao-sub').textContent = alertaAtual
-      ? `Alerta ${alertaAtual.numero_aq} — ${alertaAtual.defeito}`
-      : 'Preencha os dados da análise.';
+    document.getElementById('modal-acao-sub').textContent = nomeAlertaAtual() || 'Preencha os dados da análise.';
     modalAcaoOverlay.classList.add('open');
+    return;
+  }
+
+  if(proxima === 'Em Implementação'){
+    implForm.reset();
+    implFormError.style.display = 'none';
+    document.getElementById('modal-impl-sub').textContent = nomeAlertaAtual() || 'Preencha o prazo para implementação.';
+    // Puxa o responsável definido na etapa anterior (Ação Definida)
+    const acaoStep = [...currentFlowData].reverse().find(f => f.etapa === 'Ação Definida');
+    document.getElementById('impl-responsavel-display').textContent =
+      acaoStep && acaoStep.responsavel_implementacao ? acaoStep.responsavel_implementacao : 'Não informado na etapa anterior';
+    modalImplOverlay.classList.add('open');
+    return;
+  }
+
+  if(proxima === 'Aguardando Validação'){
+    validForm.reset();
+    validFormError.style.display = 'none';
+    document.getElementById('modal-valid-sub').textContent = nomeAlertaAtual() || 'Informe a data prevista de validação.';
+    modalValidOverlay.classList.add('open');
     return;
   }
 
@@ -1020,8 +1101,7 @@ acaoForm.addEventListener('submit', async (e) => {
   const detalhes = {
     causa_raiz: document.getElementById('fa-causa').value.trim(),
     tipo_acao: document.getElementById('fa-tipo').value,
-    responsavel_implementacao: document.getElementById('fa-impl').value.trim(),
-    responsavel_validacao: document.getElementById('fa-valid').value.trim()
+    responsavel_implementacao: document.getElementById('fa-impl').value.trim()
   };
 
   const ok = await avancarEtapa('Ação Definida', detalhes);
@@ -1037,7 +1117,68 @@ acaoForm.addEventListener('submit', async (e) => {
   }
 });
 
-async function avancarEtapa(proxima, detalhes){
+document.getElementById('impl-btn-cancel').addEventListener('click', () => {
+  modalImplOverlay.classList.remove('open');
+});
+modalImplOverlay.addEventListener('click', (e) => {
+  if(e.target === modalImplOverlay) modalImplOverlay.classList.remove('open');
+});
+
+implForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  implFormError.style.display = 'none';
+  implBtnSave.disabled = true;
+  implBtnSave.textContent = 'Salvando...';
+
+  const responsavelPuxado = document.getElementById('impl-responsavel-display').textContent;
+  const detalhes = {
+    prazo_implementacao: document.getElementById('fi-prazo').value
+  };
+
+  const ok = await avancarEtapa('Em Implementação', detalhes, responsavelPuxado !== 'Não informado na etapa anterior' ? responsavelPuxado : null);
+
+  implBtnSave.disabled = false;
+  implBtnSave.textContent = 'Salvar e Avançar';
+
+  if(ok){
+    modalImplOverlay.classList.remove('open');
+  }else{
+    implFormError.textContent = 'Não foi possível salvar. Tente novamente.';
+    implFormError.style.display = 'block';
+  }
+});
+
+document.getElementById('valid-btn-cancel').addEventListener('click', () => {
+  modalValidOverlay.classList.remove('open');
+});
+modalValidOverlay.addEventListener('click', (e) => {
+  if(e.target === modalValidOverlay) modalValidOverlay.classList.remove('open');
+});
+
+validForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  validFormError.style.display = 'none';
+  validBtnSave.disabled = true;
+  validBtnSave.textContent = 'Salvando...';
+
+  const detalhes = {
+    data_validacao: document.getElementById('fv-data').value
+  };
+
+  const ok = await avancarEtapa('Aguardando Validação', detalhes);
+
+  validBtnSave.disabled = false;
+  validBtnSave.textContent = 'Salvar e Avançar';
+
+  if(ok){
+    modalValidOverlay.classList.remove('open');
+  }else{
+    validFormError.textContent = 'Não foi possível salvar. Tente novamente.';
+    validFormError.style.display = 'block';
+  }
+});
+
+async function avancarEtapa(proxima, detalhes, responsavelEtapa){
   const btn = document.getElementById('advance-flow-btn');
   const textoOriginal = btn.textContent;
   btn.disabled = true;
@@ -1047,8 +1188,8 @@ async function avancarEtapa(proxima, detalhes){
     const { error: errFluxo } = await sb.from('fluxo_tratativas').insert([{
       alerta_id: currentAlertId,
       etapa: proxima,
-      responsavel_etapa: 'Qualidade',
-      data_hora: new Date().toISOString(),
+      responsavel_etapa: responsavelEtapa || 'Qualidade',
+      data_hora: new Date().toISOString(), // sempre a data/hora atual da atualização
       ...detalhes
     }]);
     if(errFluxo) throw errFluxo;
