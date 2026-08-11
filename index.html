@@ -319,6 +319,7 @@
             <div class="detail-item"><span class="k"><i class="fa-solid fa-layer-group"></i>Lote:</span><span class="v" id="d-lote">-</span></div>
             <div class="detail-item"><span class="k"><i class="fa-solid fa-industry"></i>Área Responsável:</span><span class="v" id="d-area">-</span></div>
             <div class="detail-item"><span class="k"><i class="fa-solid fa-user"></i>Responsável:</span><span class="v" id="d-resp">-</span></div>
+            <div class="detail-item"><span class="k"><i class="fa-solid fa-eye"></i>Quem Detectou:</span><span class="v" id="d-detectou">-</span></div>
             <div class="detail-item"><span class="k"><i class="fa-solid fa-calendar-days"></i>Data de Emissão:</span><span class="v" id="d-emissao">-</span></div>
             <div class="detail-item"><span class="k"><i class="fa-solid fa-hourglass-half"></i>Prazo para Ação:</span><span class="v" id="d-prazo">-</span></div>
             <div class="detail-item"><span class="k"><i class="fa-solid fa-stopwatch"></i>Dias Restantes:</span><span class="v" id="d-dias">-</span></div>
@@ -388,7 +389,10 @@
             </select>
           </div>
           <div class="flow" id="flow"><div class="empty-hint">Selecione um alerta acima ou na tabela.</div></div>
-          <button class="hist-btn" id="advance-flow-btn" style="margin-top:14px;" disabled>Selecione um alerta</button>
+          <div style="display:flex; gap:8px; margin-top:14px;">
+            <button class="btn-cancel" id="back-flow-btn" style="flex:1;" disabled>Voltar Etapa</button>
+            <button class="hist-btn" id="advance-flow-btn" style="flex:2; margin-top:0;" disabled>Selecione um alerta</button>
+          </div>
         </div>
         <div class="card">
           <h2>Lembretes Automáticos</h2>
@@ -440,6 +444,10 @@
           <div class="form-field">
             <label for="f-responsavel">Responsável</label>
             <input type="text" id="f-responsavel" placeholder="Nome do responsável" required>
+          </div>
+          <div class="form-field">
+            <label for="f-detectou">Quem Detectou</label>
+            <input type="text" id="f-detectou" placeholder="Nome de quem detectou" required>
           </div>
           <div class="form-field">
             <label for="f-prazo">Prazo para Ação</label>
@@ -693,6 +701,7 @@ async function showDetail(a){
   document.getElementById('d-lote').textContent = a.lote || '-';
   document.getElementById('d-area').textContent = a.area_responsavel || '-';
   document.getElementById('d-resp').textContent = a.responsavel || '-';
+  document.getElementById('d-detectou').textContent = a.quem_detectou || '-';
   document.getElementById('d-emissao').textContent = fmtDate(a.data_emissao);
   document.getElementById('d-prazo').textContent = fmtDate(a.prazo);
   document.getElementById('d-dias').textContent = a.dias !== undefined ? a.dias : '-';
@@ -735,6 +744,7 @@ async function loadFluxo(alertaId){
     currentFlowStage = null;
     currentFlowData = [];
     updateAdvanceButton();
+    updateBackButton();
     return;
   }
 
@@ -750,8 +760,12 @@ async function loadFluxo(alertaId){
     'Em Implementação':'#8E6BC9','Aguardando Validação':'#8E93A0','Encerrado':'#3FA76B'
   };
 
-  flowEl.innerHTML = data.map(f => {
+  flowEl.innerHTML = data.map((f, i) => {
     let extra = '';
+    let icone = ICONS[f.etapa] || 'fa-circle';
+    let cor = COLORS[f.etapa] || '#8E93A0';
+    let tagAprovado = '';
+
     if(f.etapa === 'Ação Definida' && (f.tipo_acao || f.responsavel_implementacao)){
       const partes = [];
       if(f.tipo_acao) partes.push(f.tipo_acao);
@@ -759,17 +773,24 @@ async function loadFluxo(alertaId){
       extra = `<div class="fdate" style="margin-top:2px;">${partes.join(' • ')}</div>`;
     } else if(f.etapa === 'Em Implementação' && f.prazo_implementacao){
       extra = `<div class="fdate" style="margin-top:2px;">Prazo: ${fmtDate(f.prazo_implementacao)}</div>`;
-    } else if(f.etapa === 'Aguardando Validação' && f.data_validacao){
-      extra = `<div class="fdate" style="margin-top:2px;">Validação: ${fmtDate(f.data_validacao)}</div>`;
+    } else if(f.etapa === 'Aguardando Validação'){
+      if(f.data_validacao) extra = `<div class="fdate" style="margin-top:2px;">Validação: ${fmtDate(f.data_validacao)}</div>`;
+      if(i < data.length - 1){
+        // já passou dessa etapa: valida como aprovada
+        icone = 'fa-thumbs-up';
+        cor = '#3FA76B';
+        tagAprovado = ' <span style="color:#3FA76B;">(Aprovado)</span>';
+      }
     }
+
     const titleAttr = f.causa_raiz ? ` title="Causa: ${f.causa_raiz.replace(/"/g,'&quot;')}"` : '';
     return `
     <div class="flow-step"${titleAttr}>
       <div class="flow-line"></div>
-      <div class="circle" style="background:${COLORS[f.etapa] || '#8E93A0'}">
-        <i class="fa-solid ${ICONS[f.etapa] || 'fa-circle'}"></i>
+      <div class="circle" style="background:${cor}">
+        <i class="fa-solid ${icone}"></i>
       </div>
-      <div class="fname">${f.etapa}<br>${f.responsavel_etapa || ''}</div>
+      <div class="fname">${f.etapa}${tagAprovado}<br>${f.responsavel_etapa || ''}</div>
       <div class="fdate">${new Date(f.data_hora).toLocaleString('pt-BR')}</div>
       ${extra}
     </div>`;
@@ -777,6 +798,7 @@ async function loadFluxo(alertaId){
 
   currentFlowStage = data[data.length - 1].etapa;
   updateAdvanceButton();
+  updateBackButton();
 }
 
 function updateAdvanceButton(){
@@ -795,6 +817,16 @@ function updateAdvanceButton(){
   const proxima = FLOW_ORDER[idx + 1];
   btn.disabled = false;
   btn.textContent = `Avançar para: ${proxima}`;
+}
+
+function updateBackButton(){
+  const btn = document.getElementById('back-flow-btn');
+  if(!currentAlertId || !currentFlowStage){
+    btn.disabled = true;
+    return;
+  }
+  const idx = FLOW_ORDER.indexOf(currentFlowStage);
+  btn.disabled = idx <= 0; // não dá pra voltar antes de "Alerta Emitido"
 }
 
 async function loadReminders(){
@@ -1082,6 +1114,11 @@ document.getElementById('advance-flow-btn').addEventListener('click', async () =
     return;
   }
 
+  if(proxima === 'Em Análise'){
+    await avancarEtapa(proxima, {}, 'Supervisão');
+    return;
+  }
+
   await avancarEtapa(proxima, {});
 });
 
@@ -1215,6 +1252,50 @@ async function avancarEtapa(proxima, detalhes, responsavelEtapa){
   }
 }
 
+/* ============================================================
+   FLUXO DE TRATATIVAS: voltar etapa (correção)
+   ============================================================ */
+document.getElementById('back-flow-btn').addEventListener('click', async () => {
+  if(!currentAlertId || !currentFlowData.length || !currentFlowStage) return;
+  const idx = FLOW_ORDER.indexOf(currentFlowStage);
+  if(idx <= 0) return; // já está em "Alerta Emitido", não dá pra voltar mais
+
+  const etapaAnterior = FLOW_ORDER[idx - 1];
+  const confirmar = confirm(
+    `Voltar de "${currentFlowStage}" para "${etapaAnterior}"?\n\nOs dados preenchidos nessa etapa serão apagados. Você poderá preenchê-los novamente ao avançar de novo.`
+  );
+  if(!confirmar) return;
+
+  const btnVoltar = document.getElementById('back-flow-btn');
+  const btnAvancar = document.getElementById('advance-flow-btn');
+  btnVoltar.disabled = true;
+  btnAvancar.disabled = true;
+  btnVoltar.textContent = 'Voltando...';
+
+  try{
+    const ultimaEtapa = currentFlowData[currentFlowData.length - 1];
+    const { error: errDelete } = await sb.from('fluxo_tratativas').delete().eq('id', ultimaEtapa.id);
+    if(errDelete) throw errDelete;
+
+    if(ultimaEtapa.etapa === 'Encerrado'){
+      const { error: errUpdate } = await sb.from('alertas_qualidade').update({
+        encerrado: false,
+        data_encerramento: null
+      }).eq('id', currentAlertId);
+      if(errUpdate) throw errUpdate;
+    }
+
+    await loadDashboard(currentAlertId);
+  }catch(err){
+    console.error('Erro ao voltar etapa:', err);
+    alert('Não foi possível voltar a etapa. Tente novamente.');
+  }finally{
+    btnVoltar.textContent = 'Voltar Etapa';
+    updateAdvanceButton();
+    updateBackButton();
+  }
+});
+
 const modalOverlay = document.getElementById('modal-overlay');
 const newAlertForm = document.getElementById('new-alert-form');
 const formError = document.getElementById('form-error');
@@ -1251,6 +1332,7 @@ newAlertForm.addEventListener('submit', async (e)=>{
     defeito: document.getElementById('f-defeito').value.trim(),
     area_responsavel: document.getElementById('f-area').value,
     responsavel: document.getElementById('f-responsavel').value.trim(),
+    quem_detectou: document.getElementById('f-detectou').value.trim(),
     prazo: document.getElementById('f-prazo').value,
     acao_contencao: document.getElementById('f-acao').value.trim() || null,
     observacoes: document.getElementById('f-obs').value.trim() || null,
@@ -1270,7 +1352,7 @@ newAlertForm.addEventListener('submit', async (e)=>{
       await sb.from('fluxo_tratativas').insert([{
         alerta_id: data[0].id,
         etapa: 'Alerta Emitido',
-        responsavel_etapa: 'Qualidade',
+        responsavel_etapa: novoAlerta.responsavel || null,
         data_hora: new Date().toISOString()
       }]);
     }
