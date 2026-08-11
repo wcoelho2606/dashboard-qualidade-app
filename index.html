@@ -1274,8 +1274,18 @@ document.getElementById('back-flow-btn').addEventListener('click', async () => {
 
   try{
     const ultimaEtapa = currentFlowData[currentFlowData.length - 1];
-    const { error: errDelete } = await sb.from('fluxo_tratativas').delete().eq('id', ultimaEtapa.id);
+    console.log('Tentando apagar etapa:', ultimaEtapa);
+
+    const { error: errDelete, data: dataDelete } = await sb
+      .from('fluxo_tratativas')
+      .delete()
+      .eq('id', ultimaEtapa.id)
+      .select();
     if(errDelete) throw errDelete;
+    console.log('Linhas apagadas:', dataDelete);
+    if(!dataDelete || dataDelete.length === 0){
+      throw new Error('Nenhuma linha foi apagada (possível bloqueio de permissão/RLS no Supabase).');
+    }
 
     if(ultimaEtapa.etapa === 'Encerrado'){
       const { error: errUpdate } = await sb.from('alertas_qualidade').update({
@@ -1288,7 +1298,7 @@ document.getElementById('back-flow-btn').addEventListener('click', async () => {
     await loadDashboard(currentAlertId);
   }catch(err){
     console.error('Erro ao voltar etapa:', err);
-    alert('Não foi possível voltar a etapa. Tente novamente.');
+    alert('Não foi possível voltar a etapa.\n\nDetalhe técnico: ' + (err.message || JSON.stringify(err)));
   }finally{
     btnVoltar.textContent = 'Voltar Etapa';
     updateAdvanceButton();
