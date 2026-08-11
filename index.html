@@ -143,6 +143,13 @@
   .hist-btn:hover{background:var(--blue);}
   .empty-hint{color:var(--text-mut);font-size:12px;padding:8px 0;}
 
+  .action-icon-btn{
+    background:none;border:none;cursor:pointer;padding:5px 7px;border-radius:6px;
+    color:var(--text-mut);font-size:12px;margin-right:2px;
+  }
+  .action-icon-btn:hover{background:#F1F3F6;color:var(--blue-light);}
+  .action-icon-btn.danger:hover{background:#FBDEDE;color:#B22C2C;}
+
   .chart-row{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:16px;}
   .chart-card{background:var(--card);border-radius:12px;border:1px solid var(--border);padding:14px;}
   .chart-card h2{font-size:11px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.3px;margin-bottom:10px;}
@@ -298,7 +305,7 @@
             <thead>
               <tr>
                 <th>Nº AQ</th><th>Produto</th><th>Lote</th><th>Defeito Detectado</th>
-                <th>Área Responsável</th><th>Responsável</th><th>Prazo</th><th>Dias Restantes</th><th>Status</th>
+                <th>Área Responsável</th><th>Responsável</th><th>Prazo</th><th>Dias Restantes</th><th>Status</th><th>Ações</th>
               </tr>
             </thead>
             <tbody></tbody>
@@ -411,8 +418,8 @@
   <!-- MODAL: Novo Alerta de Qualidade -->
   <div class="modal-overlay" id="modal-overlay">
     <div class="modal-box">
-      <h2>Novo Alerta de Qualidade</h2>
-      <p class="modal-sub">Preencha os dados abaixo para cadastrar um novo alerta.</p>
+      <h2 id="alert-modal-title">Novo Alerta de Qualidade</h2>
+      <p class="modal-sub" id="alert-modal-sub">Preencha os dados abaixo para cadastrar um novo alerta.</p>
       <form id="new-alert-form">
         <div class="form-grid">
           <div class="form-field">
@@ -575,6 +582,7 @@ let currentView = 'visao';
 let currentAlertId = null;
 let currentFlowStage = null;
 let currentFlowData = [];
+let editingAlertId = null;
 
 const FLOW_ORDER = ['Alerta Emitido','Em Análise','Ação Definida','Em Implementação','Aguardando Validação','Encerrado'];
 const VIEW_TITLES = {
@@ -673,11 +681,25 @@ function renderTable(list){
     tr.innerHTML = `
       <td><b>${a.numero_aq || '-'}</b></td><td>${a.produto || '-'}</td><td>${a.lote || '-'}</td><td>${a.defeito || '-'}</td>
       <td>${a.area_responsavel || '-'}</td><td>${a.responsavel || '-'}</td><td>${fmtDate(a.prazo)}</td>
-      <td>${a.dias !== undefined ? a.dias : '-'}</td><td><span class="badge ${cls}">${a.status || 'Em dia'}</span></td>`;
+      <td>${a.dias !== undefined ? a.dias : '-'}</td><td><span class="badge ${cls}">${a.status || 'Em dia'}</span></td>
+      <td>
+        <button class="action-icon-btn" title="Editar" data-action="edit" data-id="${a.id}"><i class="fa-solid fa-pen"></i></button>
+        <button class="action-icon-btn danger" title="Excluir" data-action="delete" data-id="${a.id}"><i class="fa-solid fa-trash"></i></button>
+      </td>`;
     tr.addEventListener('click', ()=>showDetail(a));
     tbody.appendChild(tr);
   });
 }
+
+document.querySelector('#alerts-table tbody').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-action]');
+  if(!btn) return;
+  e.stopPropagation(); // não abre os detalhes ao clicar no botão
+  const alerta = alertas.find(a => a.id === btn.dataset.id);
+  if(!alerta) return;
+  if(btn.dataset.action === 'edit') openEditModal(alerta);
+  if(btn.dataset.action === 'delete') deleteAlerta(alerta);
+});
 
 function renderReportsTable(list){
   const tbody = document.querySelector('#reports-table tbody');
@@ -750,21 +772,30 @@ async function loadFluxo(alertaId){
 
   currentFlowData = data;
 
-  const ICONS = {
-    'Alerta Emitido':'fa-file-circle-plus','Em Análise':'fa-magnifying-glass',
-    'Ação Definida':'fa-gear','Em Implementação':'fa-screwdriver-wrench',
-    'Aguardando Validação':'fa-hourglass-half','Encerrado':'fa-circle-check'
-  };
-  const COLORS = {
-    'Alerta Emitido':'#1B4F91','Em Análise':'#E8A33D','Ação Definida':'#E8A33D',
-    'Em Implementação':'#8E6BC9','Aguardando Validação':'#8E93A0','Encerrado':'#3FA76B'
+  const STAGE_CONFIG = {
+    'Alerta Emitido':       { icon:'fa-file-circle-plus', color:'#1B4F91' },
+    'Em Análise':           { icon:'fa-magnifying-glass', color:'#E8A33D' },
+    'Ação Definida':        { icon:'fa-gear', color:'#E8A33D' },
+    'Em Implementação':     { icon:'fa-hourglass-half', color:'#8E93A0',
+                               doneIcon:'fa-circle-check', doneColor:'#3FA76B', doneLabel:'Realizado' },
+    'Aguardando Validação': { icon:'fa-hourglass-half', color:'#8E93A0',
+                               doneIcon:'fa-thumbs-up', doneColor:'#3FA76B', doneLabel:'Aprovado' },
+    'Encerrado':            { icon:'fa-circle-check', color:'#3FA76B' }
   };
 
   flowEl.innerHTML = data.map((f, i) => {
     let extra = '';
-    let icone = ICONS[f.etapa] || 'fa-circle';
-    let cor = COLORS[f.etapa] || '#8E93A0';
-    let tagAprovado = '';
+    const cfg = STAGE_CONFIG[f.etapa] || { icon:'fa-circle', color:'#8E93A0' };
+    const concluida = i < data.length - 1; // já existe uma etapa depois desta
+    let icone = cfg.icon;
+    let cor = cfg.color;
+    let nomeExibido = f.etapa;
+
+    if(concluida && cfg.doneIcon){
+      icone = cfg.doneIcon;
+      cor = cfg.doneColor;
+      nomeExibido = cfg.doneLabel;
+    }
 
     if(f.etapa === 'Ação Definida' && (f.tipo_acao || f.responsavel_implementacao)){
       const partes = [];
@@ -773,14 +804,8 @@ async function loadFluxo(alertaId){
       extra = `<div class="fdate" style="margin-top:2px;">${partes.join(' • ')}</div>`;
     } else if(f.etapa === 'Em Implementação' && f.prazo_implementacao){
       extra = `<div class="fdate" style="margin-top:2px;">Prazo: ${fmtDate(f.prazo_implementacao)}</div>`;
-    } else if(f.etapa === 'Aguardando Validação'){
-      if(f.data_validacao) extra = `<div class="fdate" style="margin-top:2px;">Validação: ${fmtDate(f.data_validacao)}</div>`;
-      if(i < data.length - 1){
-        // já passou dessa etapa: valida como aprovada
-        icone = 'fa-thumbs-up';
-        cor = '#3FA76B';
-        tagAprovado = ' <span style="color:#3FA76B;">(Aprovado)</span>';
-      }
+    } else if(f.etapa === 'Aguardando Validação' && f.data_validacao){
+      extra = `<div class="fdate" style="margin-top:2px;">Validação: ${fmtDate(f.data_validacao)}</div>`;
     }
 
     const titleAttr = f.causa_raiz ? ` title="Causa: ${f.causa_raiz.replace(/"/g,'&quot;')}"` : '';
@@ -790,7 +815,7 @@ async function loadFluxo(alertaId){
       <div class="circle" style="background:${cor}">
         <i class="fa-solid ${icone}"></i>
       </div>
-      <div class="fname">${f.etapa}${tagAprovado}<br>${f.responsavel_etapa || ''}</div>
+      <div class="fname">${nomeExibido}<br>${f.responsavel_etapa || ''}</div>
       <div class="fdate">${new Date(f.data_hora).toLocaleString('pt-BR')}</div>
       ${extra}
     </div>`;
@@ -1313,13 +1338,56 @@ const formSuccess = document.getElementById('form-success');
 const btnSave = document.getElementById('btn-save');
 
 function openModal(){
+  editingAlertId = null;
   newAlertForm.reset();
+  document.getElementById('alert-modal-title').textContent = 'Novo Alerta de Qualidade';
+  document.getElementById('alert-modal-sub').textContent = 'Preencha os dados abaixo para cadastrar um novo alerta.';
+  btnSave.textContent = 'Salvar Alerta';
   formError.style.display = 'none';
   formSuccess.style.display = 'none';
   modalOverlay.classList.add('open');
 }
 function closeModal(){
   modalOverlay.classList.remove('open');
+}
+
+function openEditModal(a){
+  editingAlertId = a.id;
+  document.getElementById('f-numero').value = a.numero_aq || '';
+  document.getElementById('f-produto').value = a.produto || '';
+  document.getElementById('f-lote').value = a.lote || '';
+  document.getElementById('f-area').value = a.area_responsavel || '';
+  document.getElementById('f-defeito').value = a.defeito || '';
+  document.getElementById('f-responsavel').value = a.responsavel || '';
+  document.getElementById('f-detectou').value = a.quem_detectou || '';
+  document.getElementById('f-prazo').value = a.prazo || '';
+  document.getElementById('f-acao').value = a.acao_contencao || '';
+  document.getElementById('f-obs').value = a.observacoes || '';
+  document.getElementById('alert-modal-title').textContent = 'Editar Alerta de Qualidade';
+  document.getElementById('alert-modal-sub').textContent = `Alterando o alerta ${a.numero_aq}`;
+  btnSave.textContent = 'Salvar Alterações';
+  formError.style.display = 'none';
+  formSuccess.style.display = 'none';
+  modalOverlay.classList.add('open');
+}
+
+async function deleteAlerta(a){
+  const ok = confirm(
+    `Excluir o alerta ${a.numero_aq} — ${a.defeito}?\n\nIsso também apaga o histórico de fluxo e os lembretes desse alerta, e não pode ser desfeito.`
+  );
+  if(!ok) return;
+
+  try{
+    const { data, error } = await sb.from('alertas_qualidade').delete().eq('id', a.id).select();
+    if(error) throw error;
+    if(!data || data.length === 0){
+      throw new Error('Nenhum registro foi excluído (possível bloqueio de permissão no Supabase).');
+    }
+    await loadDashboard();
+  }catch(err){
+    console.error('Erro ao excluir alerta:', err);
+    alert('Não foi possível excluir o alerta.\n\nDetalhe técnico: ' + (err.message || JSON.stringify(err)));
+  }
 }
 
 document.getElementById('new-alert-btn').addEventListener('click', openModal);
@@ -1335,7 +1403,7 @@ newAlertForm.addEventListener('submit', async (e)=>{
   btnSave.disabled = true;
   btnSave.textContent = 'Salvando...';
 
-  const novoAlerta = {
+  const dadosAlerta = {
     numero_aq: document.getElementById('f-numero').value.trim(),
     produto: document.getElementById('f-produto').value.trim(),
     lote: document.getElementById('f-lote').value.trim(),
@@ -1345,32 +1413,42 @@ newAlertForm.addEventListener('submit', async (e)=>{
     quem_detectou: document.getElementById('f-detectou').value.trim(),
     prazo: document.getElementById('f-prazo').value,
     acao_contencao: document.getElementById('f-acao').value.trim() || null,
-    observacoes: document.getElementById('f-obs').value.trim() || null,
-    data_emissao: new Date().toISOString().slice(0,10),
-    status: 'Em dia',
-    encerrado: false
+    observacoes: document.getElementById('f-obs').value.trim() || null
   };
 
   try{
-    const { data, error } = await sb
-      .from('alertas_qualidade')
-      .insert([novoAlerta])
-      .select();
-    if(error) throw error;
+    if(editingAlertId){
+      const idEditado = editingAlertId;
+      const { error } = await sb.from('alertas_qualidade').update(dadosAlerta).eq('id', idEditado).select();
+      if(error) throw error;
 
-    if(data && data[0]){
-      await sb.from('fluxo_tratativas').insert([{
-        alerta_id: data[0].id,
-        etapa: 'Alerta Emitido',
-        responsavel_etapa: novoAlerta.responsavel || null,
-        data_hora: new Date().toISOString()
-      }]);
+      formSuccess.textContent = 'Alerta atualizado com sucesso!';
+      formSuccess.style.display = 'block';
+      editingAlertId = null;
+      await loadDashboard(idEditado);
+      setTimeout(closeModal, 900);
+    }else{
+      dadosAlerta.data_emissao = new Date().toISOString().slice(0,10);
+      dadosAlerta.status = 'Em dia';
+      dadosAlerta.encerrado = false;
+
+      const { data, error } = await sb.from('alertas_qualidade').insert([dadosAlerta]).select();
+      if(error) throw error;
+
+      if(data && data[0]){
+        await sb.from('fluxo_tratativas').insert([{
+          alerta_id: data[0].id,
+          etapa: 'Alerta Emitido',
+          responsavel_etapa: dadosAlerta.responsavel || null,
+          data_hora: new Date().toISOString()
+        }]);
+      }
+
+      formSuccess.textContent = 'Alerta cadastrado com sucesso!';
+      formSuccess.style.display = 'block';
+      await loadDashboard(data && data[0] ? data[0].id : undefined);
+      setTimeout(closeModal, 900);
     }
-
-    formSuccess.textContent = 'Alerta cadastrado com sucesso!';
-    formSuccess.style.display = 'block';
-    await loadDashboard(data && data[0] ? data[0].id : undefined);
-    setTimeout(closeModal, 900);
   }catch(err){
     console.error('Erro ao salvar alerta:', err);
     let msg = 'Não foi possível salvar. Verifique os dados e tente novamente.';
@@ -1379,7 +1457,7 @@ newAlertForm.addEventListener('submit', async (e)=>{
     formError.style.display = 'block';
   }finally{
     btnSave.disabled = false;
-    btnSave.textContent = 'Salvar Alerta';
+    btnSave.textContent = editingAlertId ? 'Salvar Alterações' : 'Salvar Alerta';
   }
 });
 
